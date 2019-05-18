@@ -51,9 +51,7 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], InstInfo progTrace[], unsig
 		dstCurrentCommand = progTrace[i].dstIdx; // this is just for convenience purposes.
 
 		progHandle->progGraph[i].latency = opsLatency[progTrace[i].opcode]; //the latency of each command
-		for (int j = 1 ; j < opsLatency[progTrace[i].opcode] ; ++j) { // we are checking a dynamic window of command
-																		// with the size of the commands latency to see
-																		// if there are any dependencies in the future.
+		for (int j = 1 ; j < numOfInsts ; ++j) { // find all commands that depend on progTrace[i]
 			if(j + i < numOfInsts) {
 				//check if RAW
 				if (dstCurrentCommand == progTrace[j + i].src1Idx){
