@@ -2,177 +2,141 @@
 /* Implementation (skeleton)  for the dataflow statistics calculator */
 
 #include "dflow_calc.h"
-#include <cstdlib>
-#include <iostream>
-using std::cout;
-using std::endl;
-
 
 #define MAX_REG 32
 
-
-
-
-
+/*this struct holds all the information for each command:
+ * the dependency fields are obviously the indicator for each dependency of the command.
+ * latency is the latency of each command as in the opsLatency table.
+ * startLatency is the time the command will start running.
+ * totalLatency is the time the command will finish its execute.
+ * */
 typedef struct {
-
-	//InstInfo cmdInfo;
-	bool visited = false;
 	int dependency1 = -1;
 	int dependency2 = -1;
-	int distFromEntry = -1;
+	int latency;
+	int startLatency = 0;
+	int totalLatency = 0;
 } command;
 typedef command* pCommand;
 
-class CmdDepsGraph{
-private:
 
-	int numOfInsts_;
-	int tableSize_;
-	int falseDepsArray_[MAX_REG];
-	int **depsMatrix_;
-public:
-	explicit CmdDepsGraph(unsigned int numOfInsts);
-	~CmdDepsGraph();
-	pCommand  commandTable_;
-	void addMatrixDependency(int commandIdx, int depIdx, int dependencyReg);
-	void setFalseDeps(int reg);
-	int getFalseDeps(unsigned int reg);
-	bool getDeps(unsigned int theInst, int *src1DepInst, int *src2DepInst);
-	void printMatrix();
+/*
+ * this struct is the DB of the program that's being analyzed.
+ * progGraph is a dynamically allocated table of the program's commands, the table is set in a sequential order
+ *  - the same order as they appear in the trace file.
+ *
+ *  progLength is the length of the trace.
+ *  falseDepsArray is an array that holds the amount of false dependencies for each one of the 32 reg's*/
+typedef struct {
+	command *progGraph;
+	int progLength = 0;
+	int falseDepsArray[MAX_REG] = {0};
+} prog;
+typedef prog* pProg;
 
 
-
-};
-
-CmdDepsGraph::CmdDepsGraph(unsigned int numOfInsts){
-	numOfInsts_ = numOfInsts;
-	tableSize_ = 0;
-	commandTable_ = new command[numOfInsts - 1];
-	for (int i = 0; i < numOfInsts; ++i) {
-		commandTable_[i].distFromEntry = -1;
-		commandTable_[i].dependency1 = -1;
-		commandTable_[i].dependency2 = -1;
-	}
-	for (int l = 0; l < MAX_REG; ++l) {
-		falseDepsArray_[l] = -1;
-	}
-	depsMatrix_ = new int* [numOfInsts];
-	for (int i = 0; i < numOfInsts ; ++i) {
-		depsMatrix_[i] = new int[numOfInsts];
-	}
-	for (int j = 0; j < numOfInsts; ++j) {
-		for (int k = 0; k < numOfInsts; ++k) {
-			depsMatrix_[j][k] = -1;
-		}
-	}
-//	commandTable_[0]->dependency1 = -1;
-//	commandTable_[0]->dependency2 = -1;
-//	commandTable_[0]->cmdSerialNum = -1;
-//	commandTable_[0]->distFromEntry = -1;
-
-
-
-}
-
-CmdDepsGraph::~CmdDepsGraph() {
-	delete [] commandTable_;
-	for (int i = 0; i < numOfInsts_ ; ++i) {
-		delete[] depsMatrix_[i];
-	}
-	delete[] depsMatrix_;
-}
-
-void CmdDepsGraph::addMatrixDependency(int commandIdx, int depIdx, int dependencyReg) {
-	depsMatrix_[commandIdx][depIdx] = dependencyReg;
-}
-
-void CmdDepsGraph::printMatrix() {
-	for (int i = 0; i < numOfInsts_; ++i) {
-		for (int j = 0; j < numOfInsts_; ++j) {
-			cout << depsMatrix_[i][j] << " ";
-		}
-		cout << endl;
-	}
-}
-
-void CmdDepsGraph::setFalseDeps(int reg) {
-	falseDepsArray_[reg]++;
-}
-
-int CmdDepsGraph::getFalseDeps(unsigned int reg) {
-	return falseDepsArray_[reg];
-}
-
-bool CmdDepsGraph::getDeps(unsigned int theInst, int *src1DepInst, int *src2DepInst) {
-	int dep[2] = {-1 ,-1} , idx =0;
-	for (int i = numOfInsts_ - 1; i >= 0; --i) {
-
-		if(depsMatrix_[theInst][i] != -1){
-			if(idx == 0){
-				*src1DepInst = depsMatrix_[theInst][i];
-				idx ++;
-			}
-			else if(idx == 1){
-				*src2DepInst = depsMatrix_[theInst][i];
-			}
-		}
-		if(idx >= 2) return true;
-	}
-}
 
 
 ProgCtx analyzeProg(const unsigned int opsLatency[], InstInfo progTrace[], unsigned int numOfInsts) {
-	CmdDepsGraph *handle = new CmdDepsGraph(numOfInsts);
+	if(!opsLatency || !progTrace || numOfInsts == 0) return PROG_CTX_NULL;
+	pProg progHandle = new prog;
+	progHandle->progGraph = new command[numOfInsts ];
+	progHandle->progLength = numOfInsts;
+	int dep1 , dep2 , tmpLatency1 , tmpLatency2;
+	int dstCurrentCommand;
 
-	for (int i = 0 ; i < numOfInsts ; ++i) {
-		for (int j = 1 ; j <= opsLatency[progTrace[i].opcode] ; ++j) {
+	// next loop is for finding dependencies between commands.
+	for (int i = 0 ; i < numOfInsts  ; ++i) { //go over all commands in the trace
+		dstCurrentCommand = progTrace[i].dstIdx; // this is just for convenience purposes.
+
+		progHandle->progGraph[i].latency = opsLatency[progTrace[i].opcode]; //the latency of each command
+		for (int j = 1 ; j < opsLatency[progTrace[i].opcode] ; ++j) { // we are checking a dynamic window of command
+																		// with the size of the commands latency to see
+																		// if there are any dependencies in the future.
 			if(j + i < numOfInsts) {
 				//check if RAW
-				if (progTrace[i].dstIdx == progTrace[j + i].src1Idx){
-					handle->addMatrixDependency(j + i, i, progTrace[i].dstIdx);
-					handle->commandTable_->dependency1 = progTrace[i].dstIdx;
+				if (dstCurrentCommand == progTrace[j + i].src1Idx){
+					progHandle->progGraph[j + i].dependency1 = i;
 				}
-				if(progTrace[i].dstIdx == progTrace[j + i].src2Idx) {
-					handle->addMatrixDependency(j + i, i, progTrace[i].dstIdx);
-					handle->commandTable_->dependency2 = progTrace[i].dstIdx;
+				if(dstCurrentCommand == progTrace[j + i].src2Idx) {
+					progHandle->progGraph[j + i].dependency2 = i;
 				}
 				//check for WAW
-				if (progTrace[i].dstIdx == progTrace[j + i].dstIdx) {
-					handle->setFalseDeps(progTrace[i].dstIdx);
+				if (j == 1 && dstCurrentCommand == progTrace[j + i].dstIdx) {
+					progHandle->falseDepsArray[dstCurrentCommand]++;
 				}
 				//check for WAR
-				if(progTrace[i].src1Idx == progTrace[j + i].dstIdx || progTrace[i].src2Idx == progTrace[j + i].dstIdx){
-					handle->setFalseDeps(progTrace[j + i].dstIdx);
+				if(j == 1 && (progTrace[i].src1Idx == progTrace[j + i].dstIdx || progTrace[i].src2Idx == progTrace[j + i].dstIdx)){
+					progHandle->falseDepsArray[progTrace[j + i].dstIdx]++;
 				}
 			}
 			else break;
 		}
 	}
-	handle->printMatrix();
-	return handle;
+	// next loop is to determine depth's of each command
+	for (int k = 0; k < numOfInsts ; ++k) {
+		tmpLatency1 = -1;
+		tmpLatency2 = -1;
+		if(progHandle->progGraph[k].dependency1 == -1 && progHandle->progGraph[k].dependency2 == -1) { 	// this means
+																											// this program
+																											// has no dependency
+			progHandle->progGraph[k].startLatency = 0;
+			progHandle->progGraph[k].totalLatency = progHandle->progGraph[k].latency;
+		}
+		else{ // the command does depend on at least one other command
+			dep1 = progHandle->progGraph[k].dependency1;
+			dep2 = progHandle->progGraph[k].dependency2;
+			if(dep1 != -1){
+				tmpLatency1 = progHandle->progGraph[dep1].totalLatency; // go to the first command the is being depended on and get its total latency
+			}
+			if(dep2 != -1){
+				tmpLatency2 = progHandle->progGraph[dep2].totalLatency; // go to the second command the is being depended on and get its total latency
+			}
+			progHandle->progGraph[k].startLatency = tmpLatency1 > tmpLatency2 ? tmpLatency1 : tmpLatency2 ; //set the start latency to be the latest execution finish time of the commands that the current command depends on
+			progHandle->progGraph[k].totalLatency = progHandle->progGraph[k].startLatency + progHandle->progGraph[k].latency; // just add the command's latency to get the time the command will finish its execution.
+		}
+	}
+
+	return progHandle;
 }
 
 void freeProgCtx(ProgCtx ctx) {
-	CmdDepsGraph *tmp = static_cast<CmdDepsGraph *> (ctx);
-	delete tmp;
+	if(!ctx) return;
+ 	pProg tmp = static_cast<pProg> (ctx);
+ 	delete [] tmp->progGraph;
+ 	delete tmp;
 }
 
 int getInstDepth(ProgCtx ctx, unsigned int theInst) {
-	return -1;
+	if(!ctx ) return -1;
+	pProg tmp = static_cast<pProg> (ctx);
+	if(tmp->progLength <= theInst) return -1;
+	return tmp->progGraph[theInst].startLatency;
+
 }
 
 int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2DepInst) {
-	return -1;
+	pProg tmp = static_cast<pProg> (ctx);
+	if(theInst >= tmp->progLength) return -1;
+	*src1DepInst = tmp->progGraph[theInst].dependency1;
+	*src2DepInst = tmp->progGraph[theInst].dependency2;
+	return 0;
 }
 
 int getRegfalseDeps(ProgCtx ctx, unsigned int reg){
-	CmdDepsGraph *tmp = static_cast<CmdDepsGraph *> (ctx);
-	return tmp->getFalseDeps(reg);
+	if(!ctx || reg > MAX_REG) return -1;
+	pProg tmp = static_cast<pProg> (ctx);
+	return tmp->falseDepsArray[reg];
 }
 
 int getProgDepth(ProgCtx ctx) {
-	return 0;
+	pProg tmp = static_cast<pProg> (ctx);
+	int tmpDepth = -1;
+	for (int i = 0; i < tmp->progLength; ++i) {
+		tmpDepth = tmpDepth > tmp->progGraph[i].totalLatency ? tmpDepth : tmp->progGraph[i].totalLatency;
+	}
+	return tmpDepth;
 }
 
 
