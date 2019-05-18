@@ -60,13 +60,18 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], InstInfo progTrace[], unsig
 				if(dstCurrentCommand == progTrace[j + i].src2Idx) {
 					progHandle->progGraph[j + i].dependency2 = i;
 				}
-				//check for WAW
-				if (j == 1 && dstCurrentCommand == progTrace[j + i].dstIdx) {
-					progHandle->falseDepsArray[dstCurrentCommand]++;
-				}
-				//check for WAR
-				if(j == 1 && (progTrace[i].src1Idx == progTrace[j + i].dstIdx || progTrace[i].src2Idx == progTrace[j + i].dstIdx)){
-					progHandle->falseDepsArray[progTrace[j + i].dstIdx]++;
+				if(j == 1) { //we check for false dependencies only one command after progTrace[i] 
+					//check for WAW
+					if (dstCurrentCommand == progTrace[j + i].dstIdx) {
+						progHandle->falseDepsArray[dstCurrentCommand]++;
+					}
+					//check for WAR
+					if (progTrace[j + i].dstIdx != dstCurrentCommand && // we only count the amount of times a register was in a false dependency and not how many dependencies were there
+						(progTrace[i].src1Idx == progTrace[j + i].dstIdx ||
+						 progTrace[i].src2Idx == progTrace[j + i].dstIdx)) {
+
+						progHandle->falseDepsArray[progTrace[j + i].dstIdx]++;
+					}
 				}
 			}
 			else break;
