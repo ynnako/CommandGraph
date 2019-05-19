@@ -34,7 +34,7 @@ typedef struct {
     \param[in] progTrace An array of instructions information from execution trace of a program
     \param[in] numOfInsts The number of instructions in progTrace[]
     \returns Analysis context that may be queried using the following query functions or PROG_CTX_NULL on failure */
-ProgCtx analyzeProg(const unsigned int opsLatency[],  InstInfo progTrace[], unsigned int numOfInsts);
+ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts);
 
 /** freeProgCtx: Free the resources associated with given program context
     \param[in] ctx The program context to free

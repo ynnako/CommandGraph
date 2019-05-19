@@ -30,15 +30,15 @@ typedef command* pCommand;
  *  falseDepsArray is an array that holds the amount of false dependencies for each one of the 32 reg's*/
 typedef struct {
 	command *progGraph;
-	int progLength = 0;
-	int falseDepsArray[MAX_REG] = {0};
+	unsigned int progLength = 0;
+	unsigned int falseDepsArray[MAX_REG] = {0};
 } prog;
 typedef prog* pProg;
 
 
 
 
-ProgCtx analyzeProg(const unsigned int opsLatency[], InstInfo progTrace[], unsigned int numOfInsts) {
+ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts) {
 	if(!opsLatency || !progTrace || numOfInsts == 0) return PROG_CTX_NULL;
 	pProg progHandle = new prog;
 	progHandle->progGraph = new command[numOfInsts ];
@@ -47,11 +47,11 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], InstInfo progTrace[], unsig
 	int dstCurrentCommand;
 
 	// next loop is for finding dependencies between commands.
-	for (int i = 0 ; i < numOfInsts  ; ++i) { //go over all commands in the trace
+	for (unsigned int i = 0 ; i < numOfInsts  ; ++i) { //go over all commands in the trace
 		dstCurrentCommand = progTrace[i].dstIdx; // this is just for convenience purposes.
 
 		progHandle->progGraph[i].latency = opsLatency[progTrace[i].opcode]; //the latency of each command
-		for (int j = 1 ; j < numOfInsts ; ++j) { // find all commands that depend on progTrace[i]
+		for (unsigned int j = 1 ; j < numOfInsts ; ++j) { // find all commands that depend on progTrace[i]
 			if(j + i < numOfInsts) {
 				//check if RAW
 				if (dstCurrentCommand == progTrace[j + i].src1Idx){
@@ -60,7 +60,7 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], InstInfo progTrace[], unsig
 				if(dstCurrentCommand == progTrace[j + i].src2Idx) {
 					progHandle->progGraph[j + i].dependency2 = i;
 				}
-				if(j == 1) { //we check for false dependencies only one command after progTrace[i] 
+				if(j == 1) { //we check for false dependencies only one command after progTrace[i]
 					//check for WAW
 					if (dstCurrentCommand == progTrace[j + i].dstIdx) {
 						progHandle->falseDepsArray[dstCurrentCommand]++;
@@ -78,7 +78,7 @@ ProgCtx analyzeProg(const unsigned int opsLatency[], InstInfo progTrace[], unsig
 		}
 	}
 	// next loop is to determine depth's of each command
-	for (int k = 0; k < numOfInsts ; ++k) {
+	for (unsigned int k = 0; k < numOfInsts ; ++k) {
 		tmpLatency1 = -1;
 		tmpLatency2 = -1;
 		if(progHandle->progGraph[k].dependency1 == -1 && progHandle->progGraph[k].dependency2 == -1) { 	// this means
@@ -136,7 +136,7 @@ int getRegfalseDeps(ProgCtx ctx, unsigned int reg){
 int getProgDepth(ProgCtx ctx) {
 	pProg tmp = static_cast<pProg> (ctx);
 	int tmpDepth = -1;
-	for (int i = 0; i < tmp->progLength; ++i) {
+	for (unsigned int i = 0; i < tmp->progLength; ++i) {
 		tmpDepth = tmpDepth > tmp->progGraph[i].totalLatency ? tmpDepth : tmp->progGraph[i].totalLatency;
 	}
 	return tmpDepth;
