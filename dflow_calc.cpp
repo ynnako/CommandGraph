@@ -38,7 +38,7 @@ typedef prog* pProg;
 
 
 
-ProgCtx analyzeProg(const unsigned int opsLatency[], const InstInfo progTrace[], unsigned int numOfInsts) {
+ProgCtx analyzeProg(const unsigned int opsLatency[],  InstInfo progTrace[],  int numOfInsts) {
 	if(!opsLatency || !progTrace || numOfInsts == 0) return PROG_CTX_NULL;
 	pProg progHandle = new prog;
 	progHandle->progGraph = new command[numOfInsts ];
