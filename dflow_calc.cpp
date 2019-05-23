@@ -44,14 +44,14 @@ ProgCtx analyzeProg(const unsigned int opsLatency[],  InstInfo progTrace[],  int
 	progHandle->progGraph = new command[numOfInsts ];
 	progHandle->progLength = numOfInsts;
 	int dep1 , dep2 , tmpLatency1 , tmpLatency2;
-	int dstCurrentCommand;
+	unsigned int dstCurrentCommand;
 
 	// next loop is for finding dependencies between commands.
-	for (unsigned int i = 0 ; i < numOfInsts  ; ++i) { //go over all commands in the trace
+	for (int i = 0 ; i < numOfInsts  ; ++i) { //go over all commands in the trace
 		dstCurrentCommand = progTrace[i].dstIdx; // this is just for convenience purposes.
 
 		progHandle->progGraph[i].latency = opsLatency[progTrace[i].opcode]; //the latency of each command
-		for (unsigned int j = 1 ; j < numOfInsts ; ++j) { // find all commands that depend on progTrace[i]
+		for (int j = 1 ; j < numOfInsts ; ++j) { // find all commands that depend on progTrace[i]
 			if(j + i < numOfInsts) {
 				//check if RAW
 				if (dstCurrentCommand == progTrace[j + i].src1Idx){
@@ -78,7 +78,7 @@ ProgCtx analyzeProg(const unsigned int opsLatency[],  InstInfo progTrace[],  int
 		}
 	}
 	// next loop is to determine depth's of each command
-	for (unsigned int k = 0; k < numOfInsts ; ++k) {
+	for (int k = 0; k < numOfInsts ; ++k) {
 		tmpLatency1 = -1;
 		tmpLatency2 = -1;
 		if(progHandle->progGraph[k].dependency1 == -1 && progHandle->progGraph[k].dependency2 == -1) { 	// this means
@@ -105,37 +105,46 @@ ProgCtx analyzeProg(const unsigned int opsLatency[],  InstInfo progTrace[],  int
 }
 
 void freeProgCtx(ProgCtx ctx) {
-	if(!ctx) return;
+	if(!ctx)
+		return;
  	pProg tmp = static_cast<pProg> (ctx);
  	delete [] tmp->progGraph;
  	delete tmp;
 }
 
 int getInstDepth(ProgCtx ctx, unsigned int theInst) {
-	if(!ctx ) return -1;
+	if(!ctx )
+		return -1;
 	pProg tmp = static_cast<pProg> (ctx);
-	if(tmp->progLength <= theInst) return -1;
+	if(tmp->progLength <= theInst)
+		return -1;
 	return tmp->progGraph[theInst].startLatency;
 
 }
 
 int getInstDeps(ProgCtx ctx, unsigned int theInst, int *src1DepInst, int *src2DepInst) {
+	if(!ctx)
+		return -1;
 	pProg tmp = static_cast<pProg> (ctx);
-	if(theInst >= tmp->progLength) return -1;
+	if(theInst >= tmp->progLength)
+		return -1;
 	*src1DepInst = tmp->progGraph[theInst].dependency1;
 	*src2DepInst = tmp->progGraph[theInst].dependency2;
 	return 0;
 }
 
 int getRegfalseDeps(ProgCtx ctx, unsigned int reg){
-	if(!ctx || reg > MAX_REG) return -1;
+	if(!ctx || reg > MAX_REG)
+		return -1;
 	pProg tmp = static_cast<pProg> (ctx);
 	return tmp->falseDepsArray[reg];
 }
 
 int getProgDepth(ProgCtx ctx) {
+	if(!ctx)
+		return -1;
 	pProg tmp = static_cast<pProg> (ctx);
-	int tmpDepth = -1;
+	int tmpDepth = 0;
 	for (unsigned int i = 0; i < tmp->progLength; ++i) {
 		tmpDepth = tmpDepth > tmp->progGraph[i].totalLatency ? tmpDepth : tmp->progGraph[i].totalLatency;
 	}
